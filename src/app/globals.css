@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Baris ini WAJIB di Tailwind v4 agar tombol Dark Mode berfungsi */
+@custom-variant dark (&:is(.dark *));
