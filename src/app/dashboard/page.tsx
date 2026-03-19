@@ -2,14 +2,16 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
 
-// Pastikan semua komponen ini sudah ada di folder src/components/dashboard/
-import SummaryCards from "@/components/dashboard/SummaryCards";
-import FinanceChart from "@/components/dashboard/FinanceChart";
-import MonthlyTrendChart from "@/components/dashboard/MonthlyTrendChart";
-import FundSourceChart from "@/components/dashboard/FundSourceChart";
-import FundUsageChart from "@/components/dashboard/FundUsageChart";
-import RecentDonorsTable from "@/components/dashboard/RecentDonorsTable";
+// Memuat komponen secara dinamis (SSR dimatikan)
+// Ini adalah KUNCI agar grafik Recharts + LocalStorage berjalan mulus di server online
+const SummaryCards = dynamic(() => import("@/components/dashboard/SummaryCards"), { ssr: false });
+const FinanceChart = dynamic(() => import("@/components/dashboard/FinanceChart"), { ssr: false });
+const MonthlyTrendChart = dynamic(() => import("@/components/dashboard/MonthlyTrendChart"), { ssr: false });
+const FundSourceChart = dynamic(() => import("@/components/dashboard/FundSourceChart"), { ssr: false });
+const FundUsageChart = dynamic(() => import("@/components/dashboard/FundUsageChart"), { ssr: false });
+const RecentDonorsTable = dynamic(() => import("@/components/dashboard/RecentDonorsTable"), { ssr: false });
 
 export default function DashboardPage() {
   return (
@@ -28,26 +30,26 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Row 1: Kartu Ringkasan (Pemasukan, Pengeluaran, Saldo, Target) */}
+      {/* Row 1: Kartu Ringkasan */}
       <SummaryCards />
 
-      {/* Row 2: Grafik Keuangan Area (Garis melengkung) */}
+      {/* Row 2: Grafik Keuangan Area */}
       <div className="grid grid-cols-1 gap-8">
         <FinanceChart />
       </div>
 
-      {/* Row 3: Tren Pemasukan Bar (Grafik Batang) */}
+      {/* Row 3: Tren Pemasukan Bar */}
       <div className="grid grid-cols-1 gap-8 mt-8">
         <MonthlyTrendChart />
       </div>
 
-      {/* Row 4: Dua Grafik Donut Berdampingan (Pemasukan Kiri, Pengeluaran Kanan) */}
+      {/* Row 4: Dua Grafik Donut Berdampingan */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
         <FundSourceChart />
         <FundUsageChart />
       </div>
 
-      {/* Row 5: Tabel 5 Donatur Terbaru */}
+      {/* Row 5: Tabel Donatur Terbaru */}
       <div className="mt-8">
         <RecentDonorsTable />
       </div>
