@@ -20,23 +20,27 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase"; // Import Supabase Client
 
-const ITEMS_PER_PAGE = 10; // Jumlah data per halaman
+const ITEMS_PER_PAGE = 10;
 
 export default function TransaksiPage() {
   const [mounted, setMounted] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+
+  // Data States
   const [transactions, setTransactions] = useState<any[]>([]);
   const [filteredTrx, setFilteredTrx] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true); // State loading untuk database
 
+  // UI States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-
-  // Paginasi State
   const [currentPage, setCurrentPage] = useState(1);
 
   const getTodayDate = () => new Date().toISOString().split("T")[0];
@@ -61,19 +65,32 @@ export default function TransaksiPage() {
     maxAmount: "",
   });
 
+  // FUNGSI MENGAMBIL DATA DARI SUPABASE
+  const fetchTransactions = async () => {
+    setIsLoadingData(true);
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .order("date", { ascending: false }); // Urutkan dari yang terbaru
+
+    if (error) {
+      console.error("Error fetching transactions:", error);
+      alert("Gagal mengambil data dari server.");
+    } else if (data) {
+      setTransactions(data);
+    }
+    setIsLoadingData(false);
+  };
+
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
       setRole(localStorage.getItem("userRole"));
-      const savedTransactions = localStorage.getItem("masjid_transactions");
-      if (savedTransactions) {
-        const parsed = JSON.parse(savedTransactions);
-        setTransactions(parsed);
-        setFilteredTrx(parsed);
-      }
+      fetchTransactions(); // Panggil data saat halaman dimuat
     }
   }, []);
 
+  // Filter Logic berjalan di sisi Client (setelah data diambil)
   useEffect(() => {
     let result = transactions;
     if (filters.search) {
@@ -108,10 +125,9 @@ export default function TransaksiPage() {
       );
     }
     setFilteredTrx(result);
-    setCurrentPage(1); // Reset ke halaman 1 setiap kali filter berubah
+    setCurrentPage(1);
   }, [filters, transactions]);
 
-  // Kalkulasi Paginasi
   const totalPages = Math.ceil(filteredTrx.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedTrx = filteredTrx.slice(
@@ -204,63 +220,82 @@ export default function TransaksiPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  // FUNGSI HAPUS DATA KE SUPABASE
+  const handleDelete = async (id: string) => {
     if (window.confirm("Yakin ingin menghapus transaksi ini?")) {
-      const updatedTrx = transactions.filter((t) => t.id !== id);
-      setTransactions(updatedTrx);
-      localStorage.setItem("masjid_transactions", JSON.stringify(updatedTrx));
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", id);
+      if (error) {
+        alert("Gagal menghapus data.");
+        console.error(error);
+      } else {
+        setTransactions(transactions.filter((t) => t.id !== id));
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // FUNGSI SIMPAN/EDIT DATA KE SUPABASE
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const inputDate = formData.date || getTodayDate();
+
     if (editId) {
-      const updatedTrx = transactions.map((t) =>
-        t.id === editId
-          ? {
-              ...t,
-              category: formData.category,
-              description: formData.description,
-              date: inputDate,
-              amount: `Rp ${formData.amount}`,
-            }
-          : t,
-      );
-      setTransactions(updatedTrx);
-      localStorage.setItem("masjid_transactions", JSON.stringify(updatedTrx));
+      // PROSES EDIT
+      const { error } = await supabase
+        .from("transactions")
+        .update({
+          category: formData.category,
+          description: formData.description,
+          date: inputDate,
+          amount: `Rp ${formData.amount}`,
+        })
+        .eq("id", editId);
+
+      if (error) alert("Gagal mengupdate data.");
+      else fetchTransactions(); // Refresh data
     } else {
-      const newTransaction = {
-        id: `TRX-${Math.floor(Math.random() * 9000) + 1000}`,
-        date: inputDate,
-        type: "Pengeluaran",
-        category: formData.category,
-        description: formData.description,
-        amount: `Rp ${formData.amount}`,
-        status: "Selesai",
-      };
-      const updatedTrx = [newTransaction, ...transactions];
-      setTransactions(updatedTrx);
-      localStorage.setItem("masjid_transactions", JSON.stringify(updatedTrx));
+      // PROSES TAMBAH BARU
+      const newId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+      const { error } = await supabase.from("transactions").insert([
+        {
+          id: newId,
+          date: inputDate,
+          type: "Pengeluaran",
+          category: formData.category,
+          description: formData.description,
+          amount: `Rp ${formData.amount}`,
+          status: "Selesai",
+        },
+      ]);
+
+      if (error) alert("Gagal menyimpan data.");
+      else fetchTransactions(); // Refresh data
     }
     setIsModalOpen(false);
   };
 
-  const handleTargetSubmit = (e: React.FormEvent) => {
+  // FUNGSI ALOKASI DANA KE SUPABASE
+  const handleTargetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const inputDate = targetFormData.date || getTodayDate();
-    const newTransaction = {
-      id: `TRX-${Math.floor(Math.random() * 9000) + 1000}`,
-      date: inputDate,
-      type: "Alokasi",
-      category: "Pembangunan",
-      description: targetFormData.description,
-      amount: `Rp ${targetFormData.amount}`,
-      status: "Selesai",
-    };
-    const updatedTrx = [newTransaction, ...transactions];
-    setTransactions(updatedTrx);
-    localStorage.setItem("masjid_transactions", JSON.stringify(updatedTrx));
+    const newId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+
+    const { error } = await supabase.from("transactions").insert([
+      {
+        id: newId,
+        date: inputDate,
+        type: "Alokasi",
+        category: "Pembangunan",
+        description: targetFormData.description,
+        amount: `Rp ${targetFormData.amount}`,
+        status: "Selesai",
+      },
+    ]);
+
+    if (error) alert("Gagal menyimpan alokasi dana.");
+    else fetchTransactions(); // Refresh data
     setIsTargetModalOpen(false);
   };
 
@@ -516,181 +551,190 @@ export default function TransaksiPage() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
-                <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  Transaksi
-                </th>
-                <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  Keterangan
-                </th>
-                <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 text-center">
-                  Tipe
-                </th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-right">
-                  Nominal
-                </th>
-                {role === "admin" && (
-                  <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-center print:hidden">
-                    Aksi
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedTrx.map((trx, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 group transition-colors"
-                >
-                  <td className="px-4 md:px-6 py-3 md:py-4">
-                    <p className="text-sm font-bold text-slate-800 dark:text-white md:hidden">
-                      {trx.description}
-                    </p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-white hidden md:block">
-                      {trx.id}
-                    </p>
-
-                    <p className="text-[11px] md:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      <span className="md:hidden">{trx.id} • </span>
-                      {formatDateDisplay(trx.date)}
-                    </p>
-
-                    <div className="md:hidden mt-2 flex gap-2">
-                      <span
-                        className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${trx.type === "Alokasi" ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800" : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
-                      >
-                        {trx.category}
-                      </span>
-                      {trx.type === "Pemasukan" ? (
-                        <span className="text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded">
-                          Masuk
-                        </span>
-                      ) : trx.type === "Alokasi" ? (
-                        <span className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
-                          Alokasi
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded">
-                          Keluar
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="hidden md:table-cell px-6 py-4">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                      {trx.description}
-                    </p>
-                    <span
-                      className={`inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded border ${trx.type === "Alokasi" ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800" : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
-                    >
-                      {trx.category}
-                    </span>
-                  </td>
-                  <td className="hidden md:table-cell px-6 py-4 text-center">
-                    {trx.type === "Pemasukan" ? (
-                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                        <ArrowDownLeft className="w-3 h-3 mr-1" />
-                        Masuk
-                      </span>
-                    ) : trx.type === "Alokasi" ? (
-                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                        <ArrowRightLeft className="w-3 h-3 mr-1" />
-                        Alokasi
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">
-                        <ArrowUpRight className="w-3 h-3 mr-1" />
-                        Keluar
-                      </span>
-                    )}
-                  </td>
-                  <td
-                    className={`px-4 md:px-6 py-3 md:py-4 text-sm font-bold text-right ${trx.type === "Pemasukan" ? "text-emerald-600 dark:text-emerald-400" : trx.type === "Alokasi" ? "text-blue-600 dark:text-blue-400" : "text-rose-600 dark:text-rose-400"}`}
-                  >
-                    {trx.type === "Pemasukan" ? "+" : "-"} {trx.amount}
-                  </td>
-                  {role === "admin" && (
-                    <td className="px-4 md:px-6 py-3 md:py-4 text-center align-top md:align-middle print:hidden">
-                      {trx.type === "Pemasukan" ? (
-                        <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 italic">
-                          Via Donatur
-                        </div>
-                      ) : (
-                        <div className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2">
-                          {trx.type !== "Alokasi" && (
-                            <button
-                              onClick={() => openEditModal(trx)}
-                              className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDelete(trx.id)}
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredTrx.length === 0 && (
-            <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
-              Tidak ada data.
-            </div>
-          )}
-        </div>
-
-        {/* --- KONTROL PAGINASI --- */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center px-4 md:px-6 py-4 border-t border-slate-100 dark:border-slate-800 gap-3 bg-slate-50/50 dark:bg-slate-900/50 print:hidden">
-            <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
-              Menampilkan{" "}
-              <span className="font-medium text-slate-800 dark:text-slate-200">
-                {filteredTrx.length === 0 ? 0 : startIndex + 1}
-              </span>{" "}
-              hingga{" "}
-              <span className="font-medium text-slate-800 dark:text-slate-200">
-                {Math.min(startIndex + ITEMS_PER_PAGE, filteredTrx.length)}
-              </span>{" "}
-              dari{" "}
-              <span className="font-medium text-slate-800 dark:text-slate-200">
-                {filteredTrx.length}
-              </span>{" "}
-              data
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-slate-800 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-300 px-2">
-                Hal {currentPage} / {totalPages}
-              </span>
-              <button
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(p + 1, totalPages))
-                }
-                disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-slate-800 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors flex flex-col min-h-75">
+        {isLoadingData ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-20 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin mb-4 text-blue-500" />
+            <p className="text-sm font-medium">Memuat data dari server...</p>
           </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      Transaksi
+                    </th>
+                    <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      Keterangan
+                    </th>
+                    <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 text-center">
+                      Tipe
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-right">
+                      Nominal
+                    </th>
+                    {role === "admin" && (
+                      <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-center print:hidden">
+                        Aksi
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedTrx.map((trx, i) => (
+                    <tr
+                      key={i}
+                      className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 group transition-colors"
+                    >
+                      <td className="px-4 md:px-6 py-3 md:py-4">
+                        <p className="text-sm font-bold text-slate-800 dark:text-white md:hidden">
+                          {trx.description}
+                        </p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-white hidden md:block">
+                          {trx.id}
+                        </p>
+
+                        <p className="text-[11px] md:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          <span className="md:hidden">{trx.id} • </span>
+                          {formatDateDisplay(trx.date)}
+                        </p>
+
+                        <div className="md:hidden mt-2 flex gap-2">
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${trx.type === "Alokasi" ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800" : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
+                          >
+                            {trx.category}
+                          </span>
+                          {trx.type === "Pemasukan" ? (
+                            <span className="text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded">
+                              Masuk
+                            </span>
+                          ) : trx.type === "Alokasi" ? (
+                            <span className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
+                              Alokasi
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded">
+                              Keluar
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="hidden md:table-cell px-6 py-4">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                          {trx.description}
+                        </p>
+                        <span
+                          className={`inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded border ${trx.type === "Alokasi" ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800" : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"}`}
+                        >
+                          {trx.category}
+                        </span>
+                      </td>
+                      <td className="hidden md:table-cell px-6 py-4 text-center">
+                        {trx.type === "Pemasukan" ? (
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                            <ArrowDownLeft className="w-3 h-3 mr-1" />
+                            Masuk
+                          </span>
+                        ) : trx.type === "Alokasi" ? (
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                            <ArrowRightLeft className="w-3 h-3 mr-1" />
+                            Alokasi
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400">
+                            <ArrowUpRight className="w-3 h-3 mr-1" />
+                            Keluar
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className={`px-4 md:px-6 py-3 md:py-4 text-sm font-bold text-right ${trx.type === "Pemasukan" ? "text-emerald-600 dark:text-emerald-400" : trx.type === "Alokasi" ? "text-blue-600 dark:text-blue-400" : "text-rose-600 dark:text-rose-400"}`}
+                      >
+                        {trx.type === "Pemasukan" ? "+" : "-"} {trx.amount}
+                      </td>
+                      {role === "admin" && (
+                        <td className="px-4 md:px-6 py-3 md:py-4 text-center align-top md:align-middle print:hidden">
+                          {trx.type === "Pemasukan" ? (
+                            <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 italic">
+                              Via Donatur
+                            </div>
+                          ) : (
+                            <div className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2">
+                              {trx.type !== "Alokasi" && (
+                                <button
+                                  onClick={() => openEditModal(trx)}
+                                  className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDelete(trx.id)}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredTrx.length === 0 && (
+                <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                  Tidak ada data transaksi.
+                </div>
+              )}
+            </div>
+
+            {/* KONTROL PAGINASI */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center px-4 md:px-6 py-4 border-t border-slate-100 dark:border-slate-800 gap-3 bg-slate-50/50 dark:bg-slate-900/50 print:hidden mt-auto">
+                <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
+                  Menampilkan{" "}
+                  <span className="font-medium text-slate-800 dark:text-slate-200">
+                    {filteredTrx.length === 0 ? 0 : startIndex + 1}
+                  </span>{" "}
+                  hingga{" "}
+                  <span className="font-medium text-slate-800 dark:text-slate-200">
+                    {Math.min(startIndex + ITEMS_PER_PAGE, filteredTrx.length)}
+                  </span>{" "}
+                  dari{" "}
+                  <span className="font-medium text-slate-800 dark:text-slate-200">
+                    {filteredTrx.length}
+                  </span>{" "}
+                  data
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs md:text-sm font-medium text-slate-600 dark:text-slate-300 px-2">
+                    Hal {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(p + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -705,9 +749,9 @@ export default function TransaksiPage() {
               onClick={() => setIsModalOpen(false)}
             />
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
               className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl z-10 overflow-hidden border border-slate-100 dark:border-slate-800"
             >
               <div className="flex justify-between items-center p-4 md:p-6 border-b border-slate-100 dark:border-slate-800">
