@@ -1,20 +1,32 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function RecentDonorsTable() {
   const [mounted, setMounted] = useState(false);
   const [donors, setDonors] = useState<any[]>([]);
 
+  const fetchRecentDonors = async () => {
+    const { data, error } = await supabase
+      .from("donors")
+      .select("*")
+      .order("lastDate", { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error("Error fetching recent donors:", error);
+      return;
+    }
+
+    if (data) {
+      setDonors(data);
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedDonors = localStorage.getItem("masjid_donors");
-      if (savedDonors) {
-        const parsedDonors = JSON.parse(savedDonors).slice(0, 5);
-        setDonors(parsedDonors);
-      }
-    }
+    fetchRecentDonors();
   }, []);
 
   const formatDateDisplay = (dateStr: string) => {

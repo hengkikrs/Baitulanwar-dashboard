@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { motion, Variants } from "framer-motion";
 import { Wallet, TrendingUp, TrendingDown, Building } from "lucide-react";
 
+import { supabase } from "@/lib/supabase";
+
 const container: Variants = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.1 } },
@@ -30,35 +32,41 @@ export default function SummaryCards() {
   // Target Pembangunan Ditetapkan ke Rp 500 Juta
   const TARGET_PEMBANGUNAN = 500000000;
 
+  const fetchSummary = async () => {
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("amount, type");
+
+    if (error) {
+      console.error("Error fetching summary:", error);
+      return;
+    }
+
+    if (transactions) {
+      let totalMasuk = 0;
+      let totalKeluar = 0;
+      let totalAlokasi = 0;
+
+      transactions.forEach((trx: any) => {
+        const nominal = parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0;
+
+        if (trx.type === "Pemasukan") totalMasuk += nominal;
+        if (trx.type === "Pengeluaran") totalKeluar += nominal;
+        if (trx.type === "Alokasi") totalAlokasi += nominal;
+      });
+
+      setSummary({
+        pemasukan: totalMasuk,
+        pengeluaran: totalKeluar,
+        saldo: totalMasuk - totalKeluar - totalAlokasi,
+        targetTerkumpul: totalAlokasi,
+      });
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedTransactions = localStorage.getItem("masjid_transactions");
-      if (savedTransactions) {
-        const transactions = JSON.parse(savedTransactions);
-
-        let totalMasuk = 0;
-        let totalKeluar = 0;
-        let totalAlokasi = 0;
-
-        // Proses penjumlahan dinamis sesuai tipe transaksi
-        transactions.forEach((trx: any) => {
-          const nominal = parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0;
-
-          if (trx.type === "Pemasukan") totalMasuk += nominal;
-          if (trx.type === "Pengeluaran") totalKeluar += nominal;
-          if (trx.type === "Alokasi") totalAlokasi += nominal;
-        });
-
-        setSummary({
-          pemasukan: totalMasuk,
-          pengeluaran: totalKeluar,
-          // Sisa Saldo = Semua Uang Masuk dikurangi Pengeluaran dan Dana yang sudah dialokasikan/dikunci untuk Pembangunan
-          saldo: totalMasuk - totalKeluar - totalAlokasi,
-          targetTerkumpul: totalAlokasi,
-        });
-      }
-    }
+    fetchSummary();
   }, []);
 
   const formatRp = (angka: number) => {

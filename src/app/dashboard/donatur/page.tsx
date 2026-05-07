@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/lib/supabase";
 import {
   Search,
   Plus,
@@ -18,6 +19,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 
 const defaultDonors = [
@@ -54,7 +56,8 @@ export default function DonaturPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [editId, setEditId] = useState<number | string | null>(null);
 
   // Paginasi State
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,20 +80,33 @@ export default function DonaturPage() {
     maxAmount: "",
   });
 
+  const fetchDonors = async () => {
+    setIsLoadingData(true);
+    const { data, error } = await supabase
+      .from("donors")
+      .select("*")
+      .order("lastDate", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching donors:", error);
+      // Jika tabel belum ada, kita gunakan default data agar tidak blank
+      setDonors(defaultDonors);
+      setFilteredDonors(defaultDonors);
+    } else if (data && data.length > 0) {
+      setDonors(data);
+      setFilteredDonors(data);
+    } else {
+      setDonors(defaultDonors);
+      setFilteredDonors(defaultDonors);
+    }
+    setIsLoadingData(false);
+  };
+
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
       setRole(localStorage.getItem("userRole"));
-      const savedDonors = localStorage.getItem("masjid_donors");
-      if (savedDonors) {
-        const parsed = JSON.parse(savedDonors);
-        setDonors(parsed);
-        setFilteredDonors(parsed);
-      } else {
-        setDonors(defaultDonors);
-        setFilteredDonors(defaultDonors);
-        localStorage.setItem("masjid_donors", JSON.stringify(defaultDonors));
-      }
+      fetchDonors();
     }
   }, []);
 
@@ -218,15 +234,19 @@ export default function DonaturPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number | string) => {
     if (window.confirm("Yakin ingin menghapus data donatur ini?")) {
-      const updatedDonors = donors.filter((d) => d.id !== id);
-      setDonors(updatedDonors);
-      localStorage.setItem("masjid_donors", JSON.stringify(updatedDonors));
+      const { error } = await supabase.from("donors").delete().eq("id", id);
+      if (error) {
+        alert("Gagal menghapus data dari server.");
+        console.error(error);
+      } else {
+        fetchDonors();
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const inputDate = formData.date || getTodayDate();
     const finalName =
@@ -235,56 +255,60 @@ export default function DonaturPage() {
     const finalPhone = formData.phone.trim() !== "" ? formData.phone : "-";
 
     if (editId) {
-      const updatedDonors = donors.map((d) =>
-        d.id === editId
-          ? {
-              ...d,
-              name: finalName,
-              email: finalEmail,
-              phone: finalPhone,
-              category: formData.category,
-              totalDonation: `Rp ${formData.amount}`,
-              status: formData.status,
-              lastDate: inputDate,
-            }
-          : d,
-      );
-      setDonors(updatedDonors);
-      localStorage.setItem("masjid_donors", JSON.stringify(updatedDonors));
-    } else {
-      const newId =
-        donors.length > 0 ? Math.max(...donors.map((d) => d.id)) + 1 : 1;
-      const newDonor = {
-        id: newId,
-        name: finalName,
-        email: finalEmail,
-        phone: finalPhone,
-        category: formData.category,
-        totalDonation: `Rp ${formData.amount}`,
-        lastDate: inputDate,
-        status: formData.status,
-      };
-      const updatedDonors = [newDonor, ...donors];
-      setDonors(updatedDonors);
-      localStorage.setItem("masjid_donors", JSON.stringify(updatedDonors));
+      const { error } = await supabase
+        .from("donors")
+        .update({
+          name: finalName,
+          email: finalEmail,
+          phone: finalPhone,
+          category: formData.category,
+          totalDonation: `Rp ${formData.amount}`,
+          status: formData.status,
+          lastDate: inputDate,
+        })
+        .eq("id", editId);
 
-      const savedTransactions = localStorage.getItem("masjid_transactions");
-      const transactions = savedTransactions
-        ? JSON.parse(savedTransactions)
-        : [];
-      const newTransaction = {
-        id: `TRX-${Math.floor(Math.random() * 9000) + 1000}`,
-        date: inputDate,
-        type: "Pemasukan",
-        category: formData.category,
-        description: `Donasi dari ${newDonor.name}`,
-        amount: `Rp ${formData.amount}`,
-        status: "Selesai",
-      };
-      localStorage.setItem(
-        "masjid_transactions",
-        JSON.stringify([newTransaction, ...transactions]),
-      );
+      if (error) {
+        alert("Gagal memperbarui data.");
+        console.error(error);
+      } else {
+        fetchDonors();
+      }
+    } else {
+      // Tambah Donatur Baru
+      const { error: donorError } = await supabase.from("donors").insert([
+        {
+          name: finalName,
+          email: finalEmail,
+          phone: finalPhone,
+          category: formData.category,
+          totalDonation: `Rp ${formData.amount}`,
+          lastDate: inputDate,
+          status: formData.status,
+        },
+      ]);
+
+      if (donorError) {
+        alert("Gagal menyimpan data donatur.");
+        console.error(donorError);
+      } else {
+        // Tambah Transaksi Pemasukan secara otomatis
+        const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+        const { error: trxError } = await supabase.from("transactions").insert([
+          {
+            id: newTrxId,
+            date: inputDate,
+            type: "Pemasukan",
+            category: formData.category,
+            description: `Donasi dari ${finalName}`,
+            amount: `Rp ${formData.amount}`,
+            status: "Selesai",
+          },
+        ]);
+
+        if (trxError) console.error("Gagal mencatat transaksi otomatis:", trxError);
+        fetchDonors();
+      }
     }
     setIsModalOpen(false);
   };
@@ -515,73 +539,77 @@ export default function DonaturPage() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
-                <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  Donatur
-                </th>
-                <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  Kontak
-                </th>
-                <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  Kategori
-                </th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-right md:text-left">
-                  Donasi
-                </th>
-                <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                  Tanggal
-                </th>
-                <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 text-center">
-                  Status
-                </th>
-                {role === "admin" && (
-                  <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-center print:hidden">
-                    Aksi
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors flex flex-col min-h-[300px]">
+        {isLoadingData ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-20 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin mb-4 text-blue-500" />
+            <p className="text-sm font-medium">Memuat data donatur...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                  <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    Donatur
                   </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedDonors.map((donor) => (
-                <tr
-                  key={donor.id}
-                  className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 group transition-colors"
-                >
-                  <td className="px-4 md:px-6 py-3 md:py-4">
-                    <p className="text-sm font-bold text-slate-800 dark:text-white">
-                      {donor.name}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      ID: #DNR-{donor.id.toString().padStart(4, "0")}
-                    </p>
-
-                    <div className="md:hidden mt-2 space-y-1">
-                      <div className="flex items-center text-[11px] text-slate-500 dark:text-slate-400">
-                        <Mail className="w-3 h-3 mr-1" />
-                        {donor.email}
+                  <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    Kontak
+                  </th>
+                  <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    Kategori
+                  </th>
+                  <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-right md:text-left">
+                    Donasi
+                  </th>
+                  <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    Tanggal
+                  </th>
+                  <th className="hidden md:table-cell px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300 text-center">
+                    Status
+                  </th>
+                  {role === "admin" && (
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm font-semibold text-slate-600 dark:text-slate-300 text-center print:hidden">
+                      Aksi
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedDonors.map((donor) => (
+                  <tr
+                    key={donor.id}
+                    className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 group transition-colors"
+                  >
+                    <td className="px-4 md:px-6 py-3 md:py-4">
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">
+                        {donor.name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        ID: #DNR-{donor.id.toString().substring(0, 4)}
+                      </p>
+                      <div className="md:hidden mt-2 space-y-1">
+                        <div className="flex items-center text-[11px] text-slate-500 dark:text-slate-400">
+                          <Mail className="w-3 h-3 mr-1" />
+                          {donor.email}
+                        </div>
+                        <div className="flex items-center text-[11px] text-slate-500 dark:text-slate-400">
+                          <Phone className="w-3 h-3 mr-1" />
+                          {donor.phone}
+                        </div>
+                        <div className="flex gap-2 mt-1.5">
+                          <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                            {donor.category}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-lg ${donor.status === "Aktif" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
+                          >
+                            {donor.status}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center text-[11px] text-slate-500 dark:text-slate-400">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {donor.phone}
-                      </div>
-                      <div className="flex gap-2 mt-1.5">
-                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                          {donor.category}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 text-[10px] font-semibold rounded-lg ${donor.status === "Aktif" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"}`}
-                        >
-                          {donor.status}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="hidden md:table-cell px-6 py-4">
+                    </td>
+                    <td className="hidden md:table-cell px-6 py-4">
                     <div className="flex flex-col space-y-1 text-xs text-slate-600 dark:text-slate-400">
                       <div className="flex items-center">
                         <Mail className="w-3 h-3 mr-1.5" />
@@ -643,10 +671,7 @@ export default function DonaturPage() {
               Tidak ada data.
             </div>
           )}
-        </div>
-
-        {/* --- KONTROL PAGINASI --- */}
-        {totalPages > 1 && (
+          {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row justify-between items-center px-4 md:px-6 py-4 border-t border-slate-100 dark:border-slate-800 gap-3 bg-slate-50/50 dark:bg-slate-900/50 print:hidden">
             <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
               Menampilkan{" "}
@@ -685,6 +710,8 @@ export default function DonaturPage() {
               </button>
             </div>
           </div>
+          )}
+        </div>
         )}
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   AreaChart,
   Area,
@@ -27,48 +28,60 @@ export default function FinanceChart() {
   const [mounted, setMounted] = useState(false);
   const [chartData, setChartData] = useState<any[]>(historicalData);
 
-  useEffect(() => {
-    setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedTransactions = localStorage.getItem("masjid_transactions");
+  const fetchChartData = async () => {
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("date, amount, type");
 
-      // Copy data historis agar tidak merubah aslinya
+    if (error) {
+      console.error("Error fetching chart data:", error);
+      return;
+    }
+
+    if (transactions) {
       let currentData = JSON.parse(JSON.stringify(historicalData));
 
-      if (savedTransactions) {
-        const transactions = JSON.parse(savedTransactions);
-
-        transactions.forEach((trx: any) => {
-          // trx.date formatnya "19 Mar 2026"
+      transactions.forEach((trx: any) => {
+        let month = "";
+        try {
+          const dateObj = new Date(trx.date);
+          month = new Intl.DateTimeFormat("id-ID", { month: "short" }).format(
+            dateObj,
+          );
+        } catch (e) {
           const parts = trx.date.split(" ");
-          if (parts.length >= 2) {
-            const month = parts[1]; // Ambil teks "Mar"
-            const nominal =
-              (parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0) / 1000000;
+          if (parts.length >= 2) month = parts[1];
+        }
 
-            // Cari index bulan di array data kita
-            const monthIndex = currentData.findIndex(
-              (d: any) => d.name === month,
-            );
+        if (month) {
+          const nominal =
+            (parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0) / 1000000;
 
-            if (monthIndex !== -1) {
-              if (trx.type === "Pemasukan")
-                currentData[monthIndex].pemasukan += nominal;
-              if (trx.type === "Pengeluaran")
-                currentData[monthIndex].pengeluaran += nominal;
-            } else {
-              // Jika ada transaksi di bulan baru (misal April), tambahkan ke ujung kanan grafik
-              currentData.push({
-                name: month,
-                pemasukan: trx.type === "Pemasukan" ? nominal : 0,
-                pengeluaran: trx.type === "Pengeluaran" ? nominal : 0,
-              });
-            }
+          const monthIndex = currentData.findIndex(
+            (d: any) => d.name === month,
+          );
+
+          if (monthIndex !== -1) {
+            if (trx.type === "Pemasukan")
+              currentData[monthIndex].pemasukan += nominal;
+            if (trx.type === "Pengeluaran")
+              currentData[monthIndex].pengeluaran += nominal;
+          } else {
+            currentData.push({
+              name: month,
+              pemasukan: trx.type === "Pemasukan" ? nominal : 0,
+              pengeluaran: trx.type === "Pengeluaran" ? nominal : 0,
+            });
           }
-        });
-      }
+        }
+      });
       setChartData(currentData);
     }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    fetchChartData();
   }, []);
 
   const textColor = mounted && theme === "dark" ? "#94a3b8" : "#64748b";

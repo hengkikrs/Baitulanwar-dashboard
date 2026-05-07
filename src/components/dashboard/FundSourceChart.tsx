@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   PieChart,
   Pie,
@@ -25,39 +26,47 @@ export default function FundSourceChart() {
   const [mounted, setMounted] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
 
+  const fetchFundSources = async () => {
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("amount, type, category");
+
+    if (error) {
+      console.error("Error fetching fund sources:", error);
+      return;
+    }
+
+    if (transactions) {
+      const catData: Record<string, number> = {};
+
+      transactions.forEach((trx: any) => {
+        if (trx.type === "Pemasukan") {
+          const nominal = parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0;
+          const cat = trx.category || "Lainnya";
+          if (!catData[cat]) catData[cat] = 0;
+          catData[cat] += nominal;
+        }
+      });
+
+      const formattedData = Object.keys(catData)
+        .map((key) => ({
+          name: key,
+          value: catData[key],
+          color: COLORS[key] || COLORS["Lainnya"],
+        }))
+        .filter((item) => item.value > 0);
+
+      setChartData(
+        formattedData.length > 0
+          ? formattedData
+          : [{ name: "Belum Ada", value: 1, color: "#cbd5e1" }],
+      );
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedTransactions = localStorage.getItem("masjid_transactions");
-      if (savedTransactions) {
-        const transactions = JSON.parse(savedTransactions);
-        const catData: Record<string, number> = {};
-
-        transactions.forEach((trx: any) => {
-          if (trx.type === "Pemasukan") {
-            const nominal =
-              parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0;
-            const cat = trx.category || "Lainnya";
-            if (!catData[cat]) catData[cat] = 0;
-            catData[cat] += nominal;
-          }
-        });
-
-        const formattedData = Object.keys(catData)
-          .map((key) => ({
-            name: key,
-            value: catData[key],
-            color: COLORS[key] || COLORS["Lainnya"],
-          }))
-          .filter((item) => item.value > 0);
-
-        setChartData(
-          formattedData.length > 0
-            ? formattedData
-            : [{ name: "Belum Ada", value: 1, color: "#cbd5e1" }],
-        );
-      }
-    }
+    fetchFundSources();
   }, []);
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   BarChart,
   Bar,
@@ -28,40 +29,58 @@ export default function MonthlyTrendChart() {
   const [mounted, setMounted] = useState(false);
   const [chartData, setChartData] = useState<any[]>(historicalBarData);
 
-  useEffect(() => {
-    setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedTransactions = localStorage.getItem("masjid_transactions");
+  const fetchTrendData = async () => {
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("date, amount, type");
 
+    if (error) {
+      console.error("Error fetching trend data:", error);
+      return;
+    }
+
+    if (transactions) {
       let currentData = JSON.parse(JSON.stringify(historicalBarData));
 
-      if (savedTransactions) {
-        const transactions = JSON.parse(savedTransactions);
-
-        transactions.forEach((trx: any) => {
-          if (trx.type === "Pemasukan") {
+      transactions.forEach((trx: any) => {
+        if (trx.type === "Pemasukan") {
+          let monthYear = "";
+          try {
+            const dateObj = new Date(trx.date);
+            const month = new Intl.DateTimeFormat("id-ID", {
+              month: "short",
+            }).format(dateObj);
+            const year = dateObj.getFullYear().toString().substring(2);
+            monthYear = `${month} '${year}`;
+          } catch (e) {
             const parts = trx.date.split(" ");
-            if (parts.length === 3) {
-              const monthYear = `${parts[1]} '${parts[2].substring(2)}`; // Output: "Mar '26"
-              const nominal =
-                (parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0) /
-                1000000;
+            if (parts.length === 3)
+              monthYear = `${parts[1]} '${parts[2].substring(2)}`;
+          }
 
-              const monthIndex = currentData.findIndex(
-                (d: any) => d.name === monthYear,
-              );
+          if (monthYear) {
+            const nominal =
+              (parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0) / 1000000;
 
-              if (monthIndex !== -1) {
-                currentData[monthIndex].value += nominal;
-              } else {
-                currentData.push({ name: monthYear, value: nominal });
-              }
+            const monthIndex = currentData.findIndex(
+              (d: any) => d.name === monthYear,
+            );
+
+            if (monthIndex !== -1) {
+              currentData[monthIndex].value += nominal;
+            } else {
+              currentData.push({ name: monthYear, value: nominal });
             }
           }
-        });
-      }
+        }
+      });
       setChartData(currentData);
     }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    fetchTrendData();
   }, []);
 
   const textColor = mounted && theme === "dark" ? "#94a3b8" : "#64748b";
