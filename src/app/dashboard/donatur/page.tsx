@@ -82,66 +82,34 @@ export default function DonaturPage() {
 
   const STORAGE_KEY = "donors_data";
 
-  const getLocalDonors = () => {
+  const getLocalDonors = (): any[] => {
     if (typeof window === "undefined") return [];
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
   };
 
   const setLocalDonors = (data: any[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  };
-
-  const checkSupabaseTable = async () => {
     try {
-      const { data, error } = await supabase
-        .from("donors")
-        .select("id")
-        .limit(1);
-      
-      if (error) {
-        console.log("checkSupabaseTable error:", error.code, error.message);
-        if (error.code === "42P01" || error.message.includes("does not exist")) {
-          return false;
-        }
-        return false;
-      }
-      return true;
-    } catch (err) {
-      console.log("checkSupabaseTable catch error:", err);
-      return false;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.error("Failed to save to localStorage:", e);
     }
   };
 
   const fetchDonors = async () => {
     setIsLoadingData(true);
     try {
-      const isSupabaseAvailable = await checkSupabaseTable();
-      console.log("Supabase available:", isSupabaseAvailable);
-      
-      if (!isSupabaseAvailable) {
-        console.log("Using localStorage data");
-        const local = getLocalDonors();
-        if (local.length > 0) {
-          setDonors(local);
-          setFilteredDonors(local);
-        } else {
-          setDonors(defaultDonors);
-          setFilteredDonors(defaultDonors);
-        }
-        setIsLoadingData(false);
-        return;
-      }
-
       const { data, error } = await supabase
         .from("donors")
         .select("*")
         .order("lastDate", { ascending: false });
 
-      console.log("fetchDonors response:", { data, error });
-
       if (error) {
-        console.error("fetchDonors error:", error);
+        console.log("Supabase error, using localStorage:", error.message);
         const local = getLocalDonors();
         if (local.length > 0) {
           setDonors(local);
@@ -155,11 +123,17 @@ export default function DonaturPage() {
         setFilteredDonors(data);
         setLocalDonors(data);
       } else {
-        setDonors(defaultDonors);
-        setFilteredDonors(defaultDonors);
+        const local = getLocalDonors();
+        if (local.length > 0) {
+          setDonors(local);
+          setFilteredDonors(local);
+        } else {
+          setDonors(defaultDonors);
+          setFilteredDonors(defaultDonors);
+        }
       }
     } catch (err) {
-      console.error("fetchDonors catch error:", err);
+      console.error("fetchDonors error:", err);
       const local = getLocalDonors();
       if (local.length > 0) {
         setDonors(local);
