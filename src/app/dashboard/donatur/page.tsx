@@ -98,17 +98,68 @@ export default function DonaturPage() {
         .from("donors")
         .select("id")
         .limit(1);
-      return !error || error.code !== "42P01";
-    } catch {
+      
+      if (error) {
+        console.log("checkSupabaseTable error:", error.code, error.message);
+        if (error.code === "42P01" || error.message.includes("does not exist")) {
+          return false;
+        }
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.log("checkSupabaseTable catch error:", err);
       return false;
     }
   };
 
   const fetchDonors = async () => {
     setIsLoadingData(true);
-    const isSupabaseAvailable = await checkSupabaseTable();
-    
-    if (!isSupabaseAvailable) {
+    try {
+      const isSupabaseAvailable = await checkSupabaseTable();
+      console.log("Supabase available:", isSupabaseAvailable);
+      
+      if (!isSupabaseAvailable) {
+        console.log("Using localStorage data");
+        const local = getLocalDonors();
+        if (local.length > 0) {
+          setDonors(local);
+          setFilteredDonors(local);
+        } else {
+          setDonors(defaultDonors);
+          setFilteredDonors(defaultDonors);
+        }
+        setIsLoadingData(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("donors")
+        .select("*")
+        .order("lastDate", { ascending: false });
+
+      console.log("fetchDonors response:", { data, error });
+
+      if (error) {
+        console.error("fetchDonors error:", error);
+        const local = getLocalDonors();
+        if (local.length > 0) {
+          setDonors(local);
+          setFilteredDonors(local);
+        } else {
+          setDonors(defaultDonors);
+          setFilteredDonors(defaultDonors);
+        }
+      } else if (data && data.length > 0) {
+        setDonors(data);
+        setFilteredDonors(data);
+        setLocalDonors(data);
+      } else {
+        setDonors(defaultDonors);
+        setFilteredDonors(defaultDonors);
+      }
+    } catch (err) {
+      console.error("fetchDonors catch error:", err);
       const local = getLocalDonors();
       if (local.length > 0) {
         setDonors(local);
@@ -117,31 +168,6 @@ export default function DonaturPage() {
         setDonors(defaultDonors);
         setFilteredDonors(defaultDonors);
       }
-      setIsLoadingData(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("donors")
-      .select("*")
-      .order("lastDate", { ascending: false });
-
-    if (error) {
-      const local = getLocalDonors();
-      if (local.length > 0) {
-        setDonors(local);
-        setFilteredDonors(local);
-      } else {
-        setDonors(defaultDonors);
-        setFilteredDonors(defaultDonors);
-      }
-    } else if (data && data.length > 0) {
-      setDonors(data);
-      setFilteredDonors(data);
-      setLocalDonors(data);
-    } else {
-      setDonors(defaultDonors);
-      setFilteredDonors(defaultDonors);
     }
     setIsLoadingData(false);
   };
@@ -309,8 +335,10 @@ export default function DonaturPage() {
     const finalPhone = formData.phone.trim() !== "" ? formData.phone : "-";
 
     const isSupabaseAvailable = await checkSupabaseTable();
+    console.log("Submit - Supabase available:", isSupabaseAvailable);
 
     if (!isSupabaseAvailable) {
+      console.log("Saving to localStorage");
       const localData = getLocalDonors();
       const newDonor = {
         id: Date.now(),
@@ -331,63 +359,83 @@ export default function DonaturPage() {
       setDonors(updatedData);
       setFilteredDonors(updatedData);
       setIsModalOpen(false);
+      alert("Data berhasil disimpan (localStorage)!");
       return;
     }
 
-    if (editId) {
-      const { error } = await supabase
-        .from("donors")
-        .update({
+    try {
+      if (editId) {
+        const { error } = await supabase
+          .from("donors")
+          .update({
+            name: finalName,
+            email: finalEmail,
+            phone: finalPhone,
+            category: formData.category,
+            totalDonation: `Rp ${formData.amount}`,
+            status: formData.status,
+            lastDate: inputDate,
+          })
+          .eq("id", editId);
+
+        if (error) {
+          console.error("Update error:", error);
+          alert(`Gagal memperbarui data: ${error.message}`);
+        } else {
+          alert("Data berhasil diperbarui!");
+          fetchDonors();
+        }
+      } else {
+        console.log("Inserting to Supabase:", {
           name: finalName,
           email: finalEmail,
           phone: finalPhone,
           category: formData.category,
           totalDonation: `Rp ${formData.amount}`,
-          status: formData.status,
           lastDate: inputDate,
-        })
-        .eq("id", editId);
+          status: formData.status,
+        });
+        
+        const { error: donorError } = await supabase.from("donors").insert([
+          {
+            name: finalName,
+            email: finalEmail,
+            phone: finalPhone,
+            category: formData.category,
+            totalDonation: `Rp ${formData.amount}`,
+            lastDate: inputDate,
+            status: formData.status,
+          },
+        ]);
 
-      if (error) {
-        alert("Gagal memperbarui data.");
-        console.error(error);
-      } else {
+        if (donorError) {
+          console.error("Insert error:", donorError);
+          alert(`Gagal menyimpan data: ${donorError.message}`);
+          return;
+        }
+
+        console.log("Insert to donors success");
+
+        const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+        const { error: trxError } = await supabase.from("transactions").insert([
+          {
+            id: newTrxId,
+            date: inputDate,
+            type: "Pemasukan",
+            category: formData.category,
+            description: `Donasi dari ${finalName}`,
+            amount: `Rp ${formData.amount}`,
+            status: "Selesai",
+          },
+        ]);
+
+        if (trxError) console.error("Gagal mencatat transaksi:", trxError);
+        alert("Data donatur berhasil disimpan!");
         fetchDonors();
       }
-    } else {
-      const { error: donorError } = await supabase.from("donors").insert([
-        {
-          name: finalName,
-          email: finalEmail,
-          phone: finalPhone,
-          category: formData.category,
-          totalDonation: `Rp ${formData.amount}`,
-          lastDate: inputDate,
-          status: formData.status,
-        },
-      ]);
-
-      if (donorError) {
-        alert("Gagal menyimpan data donatur.");
-        console.error(donorError);
-        return;
-      }
-
-      const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
-      const { error: trxError } = await supabase.from("transactions").insert([
-        {
-          id: newTrxId,
-          date: inputDate,
-          type: "Pemasukan",
-          category: formData.category,
-          description: `Donasi dari ${finalName}`,
-          amount: `Rp ${formData.amount}`,
-          status: "Selesai",
-        },
-      ]);
-
-      if (trxError) console.error("Gagal mencatat transaksi otomatis:", trxError);
-      fetchDonors();
+    } catch (err) {
+      console.error("Submit catch error:", err);
+      alert("Terjadi kesalahan saat menyimpan.");
     }
     setIsModalOpen(false);
   };
