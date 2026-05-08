@@ -8,7 +8,6 @@ import dynamic from "next/dynamic";
 // Ini adalah KUNCI agar grafik Recharts + LocalStorage berjalan mulus di server online
 const SummaryCards = dynamic(() => import("@/components/dashboard/SummaryCards"), { ssr: false });
 const FinanceChart = dynamic(() => import("@/components/dashboard/FinanceChart"), { ssr: false });
-const MonthlyTrendChart = dynamic(() => import("@/components/dashboard/MonthlyTrendChart"), { ssr: false });
 const FundSourceChart = dynamic(() => import("@/components/dashboard/FundSourceChart"), { ssr: false });
 const FundUsageChart = dynamic(() => import("@/components/dashboard/FundUsageChart"), { ssr: false });
 const RecentDonorsTable = dynamic(() => import("@/components/dashboard/RecentDonorsTable"), { ssr: false });
@@ -38,12 +37,7 @@ export default function DashboardPage() {
         <FinanceChart />
       </div>
 
-      {/* Row 3: Tren Pemasukan Bar */}
-      <div className="grid grid-cols-1 gap-8 mt-8">
-        <MonthlyTrendChart />
-      </div>
-
-      {/* Row 4: Dua Grafik Donut Berdampingan */}
+      {/* Row 3: Dua Grafik Donut Berdampingan */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
         <FundSourceChart />
         <FundUsageChart />

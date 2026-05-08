@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabase";
 import {
   Building2,
   Lock,
@@ -10,10 +11,81 @@ import {
   Save,
   User,
   ShieldCheck,
+  Loader2,
 } from "lucide-react";
 
 export default function PengaturanPage() {
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("profil");
+  const [isLoading, setIsLoading] = useState(false);
+
+  if (!mounted) return null;
+
+  const [profilForm, setProfilForm] = useState({
+    nama: "",
+    alamat: "",
+    telepon: "",
+    email: "",
+  });
+
+  useEffect(() => {
+    setMounted(true);
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    const { data, error } = await supabase
+      .from("profile")
+      .select("*")
+      .limit(1)
+      .single();
+
+    if (data) {
+      setProfilForm({
+        nama: data.nama || "",
+        alamat: data.alamat || "",
+        telepon: data.telepon || "",
+        email: data.email || "",
+      });
+    } else if (error && error.code !== "PGRST116") {
+      setProfilForm({
+        nama: "Musholla Baitul Anwar",
+        alamat: "Jl. Sudirman No. 123, Jakarta Selatan",
+        telepon: "(021) 1234567",
+        email: "admin@baitulmaal.com",
+      });
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setIsLoading(true);
+    try {
+      const { data: existing } = await supabase
+        .from("profile")
+        .select("id")
+        .limit(1)
+        .single();
+
+      if (existing) {
+        await supabase
+          .from("profile")
+          .update({
+            nama: profilForm.nama,
+            alamat: profilForm.alamat,
+            telepon: profilForm.telepon,
+            email: profilForm.email,
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("profile").insert([profilForm]);
+      }
+      alert("Profil berhasil disimpan!");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menyimpan profil.");
+    }
+    setIsLoading(false);
+  };
 
   const tabs = [
     { id: "profil", label: "Profil Musholla", icon: Building2 },
@@ -88,11 +160,12 @@ export default function PengaturanPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1 md:col-span-2">
                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors">
-                      Nama Masjid
+                      Nama Musholla
                     </label>
                     <input
                       type="text"
-                      defaultValue="Musholla Baitul Anwar"
+                      value={profilForm.nama}
+                      onChange={(e) => setProfilForm({ ...profilForm, nama: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 outline-none transition-all"
                     />
                   </div>
@@ -103,7 +176,8 @@ export default function PengaturanPage() {
                     </label>
                     <textarea
                       rows={3}
-                      defaultValue="Jl. Sudirman No. 123, Jakarta Selatan"
+                      value={profilForm.alamat}
+                      onChange={(e) => setProfilForm({ ...profilForm, alamat: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 outline-none transition-all resize-none"
                     ></textarea>
                   </div>
@@ -114,7 +188,8 @@ export default function PengaturanPage() {
                     </label>
                     <input
                       type="text"
-                      defaultValue="(021) 1234567"
+                      value={profilForm.telepon}
+                      onChange={(e) => setProfilForm({ ...profilForm, telepon: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 outline-none transition-all"
                     />
                   </div>
@@ -125,7 +200,8 @@ export default function PengaturanPage() {
                     </label>
                     <input
                       type="email"
-                      defaultValue="admin@baitulmaal.com"
+                      value={profilForm.email}
+                      onChange={(e) => setProfilForm({ ...profilForm, email: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 outline-none transition-all"
                     />
                   </div>
@@ -214,9 +290,13 @@ export default function PengaturanPage() {
 
             {/* Tombol Simpan Global */}
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end transition-colors">
-              <button className="flex items-center space-x-2 px-6 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-xl hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors shadow-sm font-medium">
-                <Save className="w-4 h-4" />
-                <span>Simpan Perubahan</span>
+              <button
+                onClick={handleSaveProfile}
+                disabled={isLoading}
+                className="flex items-center space-x-2 px-6 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-xl hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors shadow-sm font-medium disabled:opacity-50"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>{isLoading ? "Menyimpan..." : "Simpan Perubahan"}</span>
               </button>
             </div>
           </div>
