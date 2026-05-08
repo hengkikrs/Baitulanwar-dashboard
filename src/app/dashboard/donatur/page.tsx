@@ -22,28 +22,7 @@ import {
   Loader2,
 } from "lucide-react";
 
-const defaultDonors = [
-  {
-    id: 1,
-    name: "Bapak Budi Santoso",
-    email: "budi.s@email.com",
-    phone: "0812-3456-7890",
-    category: "Wakaf",
-    totalDonation: "Rp 25.000.000",
-    lastDate: "2026-03-18",
-    status: "Aktif",
-  },
-  {
-    id: 2,
-    name: "Ibu Siti Aminah",
-    email: "siti.aminah@email.com",
-    phone: "0813-4567-8901",
-    category: "Zakat",
-    totalDonation: "Rp 12.500.000",
-    lastDate: "2026-03-15",
-    status: "Aktif",
-  },
-];
+const defaultDonors: any[] = [];
 
 const ITEMS_PER_PAGE = 10; // Jumlah data per halaman
 
@@ -109,28 +88,22 @@ export default function DonaturPage() {
         .order("lastDate", { ascending: false });
 
       if (error) {
-        console.log("Supabase error, using localStorage:", error.message);
+        console.log("Supabase error:", error.message);
         const local = getLocalDonors();
         if (local.length > 0) {
           setDonors(local);
           setFilteredDonors(local);
         } else {
-          setDonors(defaultDonors);
-          setFilteredDonors(defaultDonors);
+          setDonors([]);
+          setFilteredDonors([]);
         }
       } else if (data && data.length > 0) {
         setDonors(data);
         setFilteredDonors(data);
         setLocalDonors(data);
       } else {
-        const local = getLocalDonors();
-        if (local.length > 0) {
-          setDonors(local);
-          setFilteredDonors(local);
-        } else {
-          setDonors(defaultDonors);
-          setFilteredDonors(defaultDonors);
-        }
+        setDonors([]);
+        setFilteredDonors([]);
       }
     } catch (err) {
       console.error("fetchDonors error:", err);
@@ -139,8 +112,8 @@ export default function DonaturPage() {
         setDonors(local);
         setFilteredDonors(local);
       } else {
-        setDonors(defaultDonors);
-        setFilteredDonors(defaultDonors);
+        setDonors([]);
+        setFilteredDonors([]);
       }
     }
     setIsLoadingData(false);
@@ -280,24 +253,12 @@ export default function DonaturPage() {
 
   const handleDelete = async (id: number | string) => {
     if (window.confirm("Yakin ingin menghapus data donatur ini?")) {
-      try {
-        const { error } = await supabase.from("donors").delete().eq("id", id);
-        
-        if (error) {
-          console.log("Delete from Supabase failed, using localStorage");
-          const localData = getLocalDonors().filter((d: any) => d.id !== id);
-          setLocalDonors(localData);
-          setDonors(localData);
-          setFilteredDonors(localData);
-        } else {
-          fetchDonors();
-        }
-      } catch (err) {
-        console.error("Delete error:", err);
-        const localData = getLocalDonors().filter((d: any) => d.id !== id);
-        setLocalDonors(localData);
-        setDonors(localData);
-        setFilteredDonors(localData);
+      const { error } = await supabase.from("donors").delete().eq("id", id);
+      
+      if (error) {
+        alert(`Gagal menghapus: ${error.message}`);
+      } else {
+        fetchDonors();
       }
     }
   };
@@ -309,17 +270,6 @@ export default function DonaturPage() {
       formData.name.trim() !== "" ? formData.name : "Hamba Allah";
     const finalEmail = formData.email.trim() !== "" ? formData.email : "-";
     const finalPhone = formData.phone.trim() !== "" ? formData.phone : "-";
-
-    const newDonor = {
-      id: editId || Date.now(),
-      name: finalName,
-      email: finalEmail,
-      phone: finalPhone,
-      category: formData.category,
-      totalDonation: `Rp ${formData.amount}`,
-      lastDate: inputDate,
-      status: formData.status,
-    };
 
     try {
       if (editId) {
@@ -337,13 +287,7 @@ export default function DonaturPage() {
           .eq("id", editId);
 
         if (error) {
-          console.log("Update failed, saving to localStorage:", error.message);
-          const localData = getLocalDonors();
-          const updatedData = localData.map((d: any) => d.id === editId ? { ...d, ...newDonor } : d);
-          setLocalDonors(updatedData);
-          setDonors(updatedData);
-          setFilteredDonors(updatedData);
-          alert("Data berhasil diperbarui!");
+          alert(`Gagal memperbarui: ${error.message}`);
         } else {
           alert("Data berhasil diperbarui!");
           fetchDonors();
@@ -362,40 +306,28 @@ export default function DonaturPage() {
         ]);
 
         if (donorError) {
-          console.log("Insert failed, saving to localStorage:", donorError.message);
-          const localData = getLocalDonors();
-          const updatedData = [newDonor, ...localData];
-          setLocalDonors(updatedData);
-          setDonors(updatedData);
-          setFilteredDonors(updatedData);
-          alert("Data berhasil disimpan!");
-        } else {
-          const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
-          await supabase.from("transactions").insert([
-            {
-              id: newTrxId,
-              date: inputDate,
-              type: "Pemasukan",
-              category: formData.category,
-              description: `Donasi dari ${finalName}`,
-              amount: `Rp ${formData.amount}`,
-              status: "Selesai",
-            },
-          ]);
-          alert("Data donatur berhasil disimpan!");
-          fetchDonors();
+          alert(`Gagal menyimpan: ${donorError.message}`);
+          return;
         }
+
+        const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+        await supabase.from("transactions").insert([
+          {
+            id: newTrxId,
+            date: inputDate,
+            type: "Pemasukan",
+            category: formData.category,
+            description: `Donasi dari ${finalName}`,
+            amount: `Rp ${formData.amount}`,
+            status: "Selesai",
+          },
+        ]);
+        alert("Data donatur berhasil disimpan!");
+        fetchDonors();
       }
     } catch (err) {
-      console.error("Submit error, saving to localStorage:", err);
-      const localData = getLocalDonors();
-      const updatedData = editId 
-        ? localData.map((d: any) => d.id === editId ? { ...d, ...newDonor } : d)
-        : [newDonor, ...localData];
-      setLocalDonors(updatedData);
-      setDonors(updatedData);
-      setFilteredDonors(updatedData);
-      alert("Data berhasil disimpan!");
+      console.error("Submit error:", err);
+      alert("Terjadi kesalahan saat menyimpan.");
     }
     setIsModalOpen(false);
   };

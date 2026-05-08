@@ -29,8 +29,8 @@ export default function SummaryCards() {
     targetTerkumpul: 0,
   });
 
-  // Target Pembangunan Ditetapkan ke Rp 500 Juta
-  const TARGET_PEMBANGUNAN = 500000000;
+  // Target Pembangunan Ditetapkan ke Rp 7 Juta
+  const TARGET_PEMBANGUNAN = 7000000;
 
   const fetchSummary = async () => {
     const { data: transactions, error } = await supabase
