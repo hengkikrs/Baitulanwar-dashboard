@@ -11,9 +11,9 @@ const defaultProfile = {
   phone: "(021) 1234567",
   email: "admin@baitulmaal.com",
   bankAccounts:
-    "Bank Syariah Indonesia (BSI)\nNo. Rek: 1234567890\na.n Masjid Baitul Maal\n\nBank Mandiri\nNo. Rek: 0987654321\na.n Masjid Baitul Maal",
+    "Bank Syariah Indonesia (BSI)\nNo. Rek: 7149948017\na.n Khafid Ainul Yaqin\n",
   mapsUrl:
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3966.666427009772!2d106.8295180153697!3d-6.175392395529188!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e69f5d2e764b12d%3A0x3d2ad6e1e0e9bcc8!2sMonumen%20Nasional!5e0!3m2!1sen!2sid!4v1689258282000!5m2!1sen!2sid",
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d248.34660781275886!2d104.87824478412344!3d-5.176511699833086!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e4749c4dd2fbeed%3A0xc3bd65b32dbf131!2sMusholla%20Baitul%20Anwar!5e0!3m2!1sid!2sid!4v1778202688731!5m2!1sid!2sid",
 };
 
 export default function TentangPage() {
