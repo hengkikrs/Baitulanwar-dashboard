@@ -34,42 +34,49 @@ export default function SummaryCards() {
   const TARGET_PEMBANGUNAN = 7000000;
 
   const fetchSummary = async () => {
-    // 1. Fetch Transaksi
+    // 1. Fetch Transaksi (untuk Pengeluaran & Alokasi)
     const { data: transactions, error: trxError } = await supabase
       .from("transactions")
       .select("amount, type");
 
-    // 2. Fetch Jumlah Donatur
-    const { count: donorCount, error: donorError } = await supabase
+    // 2. Fetch Donatur (untuk Total Pemasukan & Jumlah Donatur)
+    const { data: donors, count: donorCount, error: donorError } = await supabase
       .from("donors")
-      .select("*", { count: 'exact', head: true });
+      .select("totalDonation", { count: 'exact' });
 
     if (trxError || donorError) {
       console.error("Error fetching summary:", trxError || donorError);
       return;
     }
 
-    if (transactions) {
-      let totalMasuk = 0;
-      let totalKeluar = 0;
-      let totalAlokasi = 0;
+    let totalMasuk = 0;
+    let totalKeluar = 0;
+    let totalAlokasi = 0;
 
+    // Hitung Total Pemasukan dari tabel Donatur (Permintaan User)
+    if (donors) {
+      donors.forEach((donor: any) => {
+        const nominal = parseInt(donor.totalDonation.replace(/[^0-9]/g, ""), 10) || 0;
+        totalMasuk += nominal;
+      });
+    }
+
+    // Hitung Pengeluaran & Alokasi dari tabel Transaksi
+    if (transactions) {
       transactions.forEach((trx: any) => {
         const nominal = parseInt(trx.amount.replace(/[^0-9]/g, ""), 10) || 0;
-
-        if (trx.type === "Pemasukan") totalMasuk += nominal;
         if (trx.type === "Pengeluaran") totalKeluar += nominal;
         if (trx.type === "Alokasi") totalAlokasi += nominal;
       });
-
-      setSummary({
-        pemasukan: totalMasuk,
-        pengeluaran: totalKeluar,
-        saldo: totalMasuk - totalKeluar - totalAlokasi,
-        targetTerkumpul: totalAlokasi,
-        totalDonatur: donorCount || 0,
-      });
     }
+
+    setSummary({
+      pemasukan: totalMasuk,
+      pengeluaran: totalKeluar,
+      saldo: totalMasuk - totalKeluar - totalAlokasi,
+      targetTerkumpul: totalAlokasi,
+      totalDonatur: donorCount || 0,
+    });
   };
 
   useEffect(() => {
