@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { motion, Variants } from "framer-motion";
-import { Wallet, TrendingUp, TrendingDown, Building } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Building, Users } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -27,18 +27,25 @@ export default function SummaryCards() {
     pengeluaran: 0,
     saldo: 0,
     targetTerkumpul: 0,
+    totalDonatur: 0,
   });
 
   // Target Pembangunan Ditetapkan ke Rp 7 Juta
   const TARGET_PEMBANGUNAN = 7000000;
 
   const fetchSummary = async () => {
-    const { data: transactions, error } = await supabase
+    // 1. Fetch Transaksi
+    const { data: transactions, error: trxError } = await supabase
       .from("transactions")
       .select("amount, type");
 
-    if (error) {
-      console.error("Error fetching summary:", error);
+    // 2. Fetch Jumlah Donatur
+    const { count: donorCount, error: donorError } = await supabase
+      .from("donors")
+      .select("*", { count: 'exact', head: true });
+
+    if (trxError || donorError) {
+      console.error("Error fetching summary:", trxError || donorError);
       return;
     }
 
@@ -60,6 +67,7 @@ export default function SummaryCards() {
         pengeluaran: totalKeluar,
         saldo: totalMasuk - totalKeluar - totalAlokasi,
         targetTerkumpul: totalAlokasi,
+        totalDonatur: donorCount || 0,
       });
     }
   };
@@ -84,6 +92,15 @@ export default function SummaryCards() {
   );
 
   const summaryData = [
+    {
+      title: "Total Donatur",
+      amount: summary.totalDonatur.toLocaleString("id-ID"),
+      icon: Users,
+      color: "text-indigo-600 dark:text-indigo-400",
+      bg: "bg-indigo-100 dark:bg-indigo-950/40",
+      description: "Jumlah Pemberi Donasi",
+      isTarget: false,
+    },
     {
       title: "Total Pemasukan",
       amount: formatRp(summary.pemasukan),
@@ -129,7 +146,7 @@ export default function SummaryCards() {
       variants={container}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8"
     >
       {summaryData.map((data, index) => (
         <motion.div
