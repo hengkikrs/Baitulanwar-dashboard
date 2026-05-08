@@ -2,15 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Phone, Mail, CreditCard, Map } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { MapPin, Phone, Mail, CreditCard, Map, Loader2 } from "lucide-react";
 
-// Data default jika admin belum menyetel pengaturan
 const defaultProfile = {
-  name: "Masjid Baitul Maal",
-  address:
-    "Jl. Contoh Raya No. 123, Kelurahan Damai, Kecamatan Sejahtera, Kota Contoh, 12345",
-  phone: "0812-3456-7890",
-  email: "kontak@baitulmaal.com",
+  name: "Musholla Baitul Anwar",
+  address: "Jl. Sudirman No. 123, Jakarta Selatan",
+  phone: "(021) 1234567",
+  email: "admin@baitulmaal.com",
   bankAccounts:
     "Bank Syariah Indonesia (BSI)\nNo. Rek: 1234567890\na.n Masjid Baitul Maal\n\nBank Mandiri\nNo. Rek: 0987654321\na.n Masjid Baitul Maal",
   mapsUrl:
@@ -20,16 +19,43 @@ const defaultProfile = {
 export default function TentangPage() {
   const [mounted, setMounted] = useState(false);
   const [profile, setProfile] = useState(defaultProfile);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const savedProfile = localStorage.getItem("masjid_profile");
-      if (savedProfile) {
-        setProfile(JSON.parse(savedProfile));
-      }
-    }
+    fetchProfile();
   }, []);
+
+  const fetchProfile = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from("profile")
+      .select("*")
+      .limit(1)
+      .single();
+
+    if (data) {
+      setProfile({
+        name: data.nama || defaultProfile.name,
+        address: data.alamat || defaultProfile.address,
+        phone: data.telepon || defaultProfile.phone,
+        email: data.email || defaultProfile.email,
+        bankAccounts: defaultProfile.bankAccounts,
+        mapsUrl: defaultProfile.mapsUrl,
+      });
+    } else if (error && error.code !== "PGRST116") {
+      console.log("Error fetching profile:", error);
+    }
+    setIsLoading(false);
+  };
+
+  if (!mounted || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   if (!mounted) return null;
 
