@@ -10,11 +10,11 @@ export default function TopDonorsList() {
   const [mounted, setMounted] = useState(false);
 
   const fetchTopDonors = async () => {
+    // Kita ambil semua data dan urutkan secara numerik di client 
+    // karena kolom totalDonation di database adalah string (Rp ...)
     const { data, error } = await supabase
       .from("donors")
-      .select("name, totalDonation")
-      .order("totalDonation", { ascending: false })
-      .limit(5);
+      .select("name, totalDonation");
 
     if (error) {
       console.error("Error fetching top donors:", error);
@@ -22,7 +22,16 @@ export default function TopDonorsList() {
     }
 
     if (data) {
-      setDonors(data);
+      // Parsing dan urutkan secara angka (descending)
+      const sortedData = data
+        .map(d => ({
+          ...d,
+          numericValue: parseInt(d.totalDonation.replace(/[^0-9]/g, ""), 10) || 0
+        }))
+        .sort((a, b) => b.numericValue - a.numericValue)
+        .slice(0, 5); // Ambil 5 teratas
+
+      setDonors(sortedData);
     }
   };
 

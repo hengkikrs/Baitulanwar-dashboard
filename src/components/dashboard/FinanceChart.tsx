@@ -3,13 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts";
 import { useTheme } from "next-themes";
 import { TrendingUp, TrendingDown } from "lucide-react";
@@ -103,10 +104,10 @@ export default function FinanceChart() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h3 className="text-xl font-bold text-slate-800 dark:text-white transition-colors">
-            Tren Arus Kas
+            Perbandingan Kas
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Statistik pemasukan & pengeluaran bulanan (Juta Rp)
+            Garis pemasukan vs pengeluaran (Juta Rp)
           </p>
         </div>
         
@@ -134,20 +135,10 @@ export default function FinanceChart() {
 
       <div className="flex-1 w-full h-80">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
+          <LineChart
             data={chartData}
             margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
           >
-            <defs>
-              <linearGradient id="colorPemasukan" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="colorPengeluaran" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-              </linearGradient>
-            </defs>
             <CartesianGrid
               strokeDasharray="3 3"
               vertical={false}
@@ -179,25 +170,28 @@ export default function FinanceChart() {
                 typeof value === "number" ? `Rp ${value.toFixed(2)} Juta` : value
               }
             />
-            <Area
+            <Legend verticalAlign="top" align="right" height={36} iconType="circle" />
+            <Line
               type="monotone"
               dataKey="pemasukan"
+              name="Pemasukan"
               stroke="#2563eb"
               strokeWidth={4}
-              fillOpacity={1}
-              fill="url(#colorPemasukan)"
+              dot={{ r: 6, fill: "#2563eb", strokeWidth: 2, stroke: "#fff" }}
+              activeDot={{ r: 8 }}
               animationDuration={1500}
             />
-            <Area
+            <Line
               type="monotone"
               dataKey="pengeluaran"
+              name="Pengeluaran"
               stroke="#f43f5e"
               strokeWidth={4}
-              fillOpacity={1}
-              fill="url(#colorPengeluaran)"
+              dot={{ r: 6, fill: "#f43f5e", strokeWidth: 2, stroke: "#fff" }}
+              activeDot={{ r: 8 }}
               animationDuration={1500}
             />
-          </AreaChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </div>

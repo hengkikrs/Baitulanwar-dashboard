@@ -252,12 +252,20 @@ export default function DonaturPage() {
   };
 
   const handleDelete = async (id: number | string) => {
-    if (window.confirm("Yakin ingin menghapus data donatur ini?")) {
-      const { error } = await supabase.from("donors").delete().eq("id", id);
+    if (window.confirm("Yakin ingin menghapus data donatur ini? Seluruh transaksi terkait juga akan dihapus.")) {
+      // 1. Ambil nama donatur dulu sebelum dihapus untuk mencari transaksi terkait
+      const { data: donorData } = await supabase.from("donors").select("name").eq("id", id).single();
       
-      if (error) {
-        alert(`Gagal menghapus: ${error.message}`);
+      const { error: donorError } = await supabase.from("donors").delete().eq("id", id);
+      
+      if (donorError) {
+        alert(`Gagal menghapus data: ${donorError.message}`);
+        console.error(donorError);
       } else {
+        // 2. Hapus transaksi terkait jika nama ditemukan
+        if (donorData?.name) {
+          await supabase.from("transactions").delete().ilike("description", `%Donasi dari ${donorData.name}%`);
+        }
         fetchDonors();
       }
     }
