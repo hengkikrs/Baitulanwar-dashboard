@@ -11,17 +11,17 @@ import {
   Tooltip,
   ResponsiveContainer,
   LabelList,
+  Cell,
 } from "recharts";
 import { useTheme } from "next-themes";
 
-// Data riwayat historis
 const historicalBarData = [
   { name: "Okt '25", value: 71.5 },
   { name: "Nov '25", value: 118.3 },
   { name: "Des '25", value: 215.5 },
   { name: "Jan '26", value: 104.5 },
   { name: "Feb '26", value: 175.6 },
-  { name: "Mar '26", value: 0 }, // Akan diisi dinamis
+  { name: "Mar '26", value: 0 },
 ];
 
 export default function MonthlyTrendChart() {
@@ -85,14 +85,18 @@ export default function MonthlyTrendChart() {
 
   const textColor = mounted && theme === "dark" ? "#94a3b8" : "#64748b";
   const gridColor = mounted && theme === "dark" ? "#1e293b" : "#f1f5f9";
-  const barColor = "#3b82f6";
-  const labelColor = mounted && theme === "dark" ? "#ffffff" : "#0f172a";
+  
+  if (!mounted) return null;
 
   return (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 h-100 flex flex-col transition-colors duration-300">
-      <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6 transition-colors">
-        Tren Pemasukan Bulanan (Juta Rp)
+    <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 h-100 flex flex-col transition-all duration-300">
+      <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2 transition-colors">
+        Tren Pemasukan
       </h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 transition-colors">
+        Volume donasi masuk bulanan (Juta Rp)
+      </p>
+      
       <div className="flex-1 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -108,33 +112,36 @@ export default function MonthlyTrendChart() {
               dataKey="name"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: textColor, fontSize: 10 }}
-              dy={5}
+              tick={{ fill: textColor, fontSize: 10, fontWeight: 500 }}
+              dy={10}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: textColor, fontSize: 10 }}
+              tick={{ fill: textColor, fontSize: 10, fontWeight: 500 }}
             />
             <Tooltip
+              cursor={{ fill: 'transparent' }}
               contentStyle={{
-                backgroundColor:
-                  mounted && theme === "dark" ? "#0f172a" : "#fff",
-                borderRadius: "12px",
-                border: "none",
-                color: mounted && theme === "dark" ? "#fff" : "#000",
+                backgroundColor: theme === "dark" ? "#0f172a" : "#fff",
+                borderRadius: "16px",
+                border: theme === "dark" ? "1px solid #1e293b" : "1px solid #f1f5f9",
+                boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
               }}
-              // FIX: Ubah parameter menjadi any dan tambahkan pengecekan tipe
               formatter={(value: any) =>
-                typeof value === "number" ? value.toFixed(2) : value
+                typeof value === "number" ? `Rp ${value.toFixed(2)} Juta` : value
               }
             />
-            <Bar dataKey="value" fill={barColor} radius={[6, 6, 0, 0]}>
+            <Bar dataKey="value" radius={[8, 8, 0, 0]} animationDuration={1500}>
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? "#3b82f6" : "#60a5fa"} />
+              ))}
               <LabelList
                 dataKey="value"
                 position="top"
-                fill={labelColor}
+                fill={theme === "dark" ? "#fff" : "#0f172a"}
                 fontSize={10}
+                fontWeight={700}
                 formatter={(value: any) =>
                   typeof value === "number" ? value.toFixed(1) : value
                 }
