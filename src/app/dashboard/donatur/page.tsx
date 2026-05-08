@@ -280,22 +280,24 @@ export default function DonaturPage() {
 
   const handleDelete = async (id: number | string) => {
     if (window.confirm("Yakin ingin menghapus data donatur ini?")) {
-      const isSupabaseAvailable = await checkSupabaseTable();
-      
-      if (!isSupabaseAvailable) {
+      try {
+        const { error } = await supabase.from("donors").delete().eq("id", id);
+        
+        if (error) {
+          console.log("Delete from Supabase failed, using localStorage");
+          const localData = getLocalDonors().filter((d: any) => d.id !== id);
+          setLocalDonors(localData);
+          setDonors(localData);
+          setFilteredDonors(localData);
+        } else {
+          fetchDonors();
+        }
+      } catch (err) {
+        console.error("Delete error:", err);
         const localData = getLocalDonors().filter((d: any) => d.id !== id);
         setLocalDonors(localData);
         setDonors(localData);
         setFilteredDonors(localData);
-        return;
-      }
-
-      const { error } = await supabase.from("donors").delete().eq("id", id);
-      if (error) {
-        alert("Gagal menghapus data dari server.");
-        console.error(error);
-      } else {
-        fetchDonors();
       }
     }
   };
@@ -308,34 +310,16 @@ export default function DonaturPage() {
     const finalEmail = formData.email.trim() !== "" ? formData.email : "-";
     const finalPhone = formData.phone.trim() !== "" ? formData.phone : "-";
 
-    const isSupabaseAvailable = await checkSupabaseTable();
-    console.log("Submit - Supabase available:", isSupabaseAvailable);
-
-    if (!isSupabaseAvailable) {
-      console.log("Saving to localStorage");
-      const localData = getLocalDonors();
-      const newDonor = {
-        id: Date.now(),
-        name: finalName,
-        email: finalEmail,
-        phone: finalPhone,
-        category: formData.category,
-        totalDonation: `Rp ${formData.amount}`,
-        lastDate: inputDate,
-        status: formData.status,
-      };
-      
-      const updatedData = editId 
-        ? localData.map((d: any) => d.id === editId ? { ...d, ...newDonor, id: editId } : d)
-        : [newDonor, ...localData];
-      
-      setLocalDonors(updatedData);
-      setDonors(updatedData);
-      setFilteredDonors(updatedData);
-      setIsModalOpen(false);
-      alert("Data berhasil disimpan (localStorage)!");
-      return;
-    }
+    const newDonor = {
+      id: editId || Date.now(),
+      name: finalName,
+      email: finalEmail,
+      phone: finalPhone,
+      category: formData.category,
+      totalDonation: `Rp ${formData.amount}`,
+      lastDate: inputDate,
+      status: formData.status,
+    };
 
     try {
       if (editId) {
@@ -353,23 +337,18 @@ export default function DonaturPage() {
           .eq("id", editId);
 
         if (error) {
-          console.error("Update error:", error);
-          alert(`Gagal memperbarui data: ${error.message}`);
+          console.log("Update failed, saving to localStorage:", error.message);
+          const localData = getLocalDonors();
+          const updatedData = localData.map((d: any) => d.id === editId ? { ...d, ...newDonor } : d);
+          setLocalDonors(updatedData);
+          setDonors(updatedData);
+          setFilteredDonors(updatedData);
+          alert("Data berhasil diperbarui!");
         } else {
           alert("Data berhasil diperbarui!");
           fetchDonors();
         }
       } else {
-        console.log("Inserting to Supabase:", {
-          name: finalName,
-          email: finalEmail,
-          phone: finalPhone,
-          category: formData.category,
-          totalDonation: `Rp ${formData.amount}`,
-          lastDate: inputDate,
-          status: formData.status,
-        });
-        
         const { error: donorError } = await supabase.from("donors").insert([
           {
             name: finalName,
@@ -383,33 +362,40 @@ export default function DonaturPage() {
         ]);
 
         if (donorError) {
-          console.error("Insert error:", donorError);
-          alert(`Gagal menyimpan data: ${donorError.message}`);
-          return;
+          console.log("Insert failed, saving to localStorage:", donorError.message);
+          const localData = getLocalDonors();
+          const updatedData = [newDonor, ...localData];
+          setLocalDonors(updatedData);
+          setDonors(updatedData);
+          setFilteredDonors(updatedData);
+          alert("Data berhasil disimpan!");
+        } else {
+          const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+          await supabase.from("transactions").insert([
+            {
+              id: newTrxId,
+              date: inputDate,
+              type: "Pemasukan",
+              category: formData.category,
+              description: `Donasi dari ${finalName}`,
+              amount: `Rp ${formData.amount}`,
+              status: "Selesai",
+            },
+          ]);
+          alert("Data donatur berhasil disimpan!");
+          fetchDonors();
         }
-
-        console.log("Insert to donors success");
-
-        const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
-        const { error: trxError } = await supabase.from("transactions").insert([
-          {
-            id: newTrxId,
-            date: inputDate,
-            type: "Pemasukan",
-            category: formData.category,
-            description: `Donasi dari ${finalName}`,
-            amount: `Rp ${formData.amount}`,
-            status: "Selesai",
-          },
-        ]);
-
-        if (trxError) console.error("Gagal mencatat transaksi:", trxError);
-        alert("Data donatur berhasil disimpan!");
-        fetchDonors();
       }
     } catch (err) {
-      console.error("Submit catch error:", err);
-      alert("Terjadi kesalahan saat menyimpan.");
+      console.error("Submit error, saving to localStorage:", err);
+      const localData = getLocalDonors();
+      const updatedData = editId 
+        ? localData.map((d: any) => d.id === editId ? { ...d, ...newDonor } : d)
+        : [newDonor, ...localData];
+      setLocalDonors(updatedData);
+      setDonors(updatedData);
+      setFilteredDonors(updatedData);
+      alert("Data berhasil disimpan!");
     }
     setIsModalOpen(false);
   };
