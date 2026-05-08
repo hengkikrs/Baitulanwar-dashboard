@@ -18,14 +18,11 @@ export default function PengaturanPage() {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("profil");
   const [isLoading, setIsLoading] = useState(false);
-
-  if (!mounted) return null;
-
   const [profilForm, setProfilForm] = useState({
-    nama: "",
-    alamat: "",
-    telepon: "",
-    email: "",
+    nama: "Musholla Baitul Anwar",
+    alamat: "Jl. Sudirman No. 123, Jakarta Selatan",
+    telepon: "(021) 1234567",
+    email: "admin@baitulmaal.com",
   });
 
   useEffect(() => {
@@ -48,14 +45,17 @@ export default function PengaturanPage() {
         email: data.email || "",
       });
     } else if (error && error.code !== "PGRST116") {
-      setProfilForm({
-        nama: "Musholla Baitul Anwar",
-        alamat: "Jl. Sudirman No. 123, Jakarta Selatan",
-        telepon: "(021) 1234567",
-        email: "admin@baitulmaal.com",
-      });
+      console.log("Error fetching profile:", error);
     }
   };
+
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   const handleSaveProfile = async () => {
     setIsLoading(true);
