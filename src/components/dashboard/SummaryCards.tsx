@@ -30,8 +30,8 @@ export default function SummaryCards() {
     totalDonatur: 0,
   });
 
-  // Target Pembangunan Ditetapkan ke Rp 7 Juta
-  const TARGET_PEMBANGUNAN = 7000000;
+  // Target Pemasukan Ditetapkan ke Rp 7 Juta
+  const TARGET_PEMASUKAN = 7000000;
 
   const fetchSummary = async () => {
     // 1. Fetch Transaksi (untuk Pengeluaran & Alokasi)
@@ -94,9 +94,11 @@ export default function SummaryCards() {
 
   // Menghitung persentase Progress Bar (Maksimal 100%)
   const percentage = Math.min(
-    Math.round((summary.targetTerkumpul / TARGET_PEMBANGUNAN) * 100),
+    Math.round((summary.pemasukan / TARGET_PEMASUKAN) * 100),
     100,
   );
+
+  const remaining = Math.max(TARGET_PEMASUKAN - summary.pemasukan, 0);
 
   const summaryData = [
     {
@@ -105,7 +107,7 @@ export default function SummaryCards() {
       icon: Users,
       color: "text-indigo-600 dark:text-indigo-400",
       bg: "bg-indigo-100 dark:bg-indigo-950/40",
-      description: "Jumlah Pemberi Donasi",
+      description: "Pemberi Donasi",
       isTarget: false,
     },
     {
@@ -114,7 +116,7 @@ export default function SummaryCards() {
       icon: TrendingUp,
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-100 dark:bg-emerald-950/40",
-      description: "Dari Semua Donatur",
+      description: "Dana Donatur",
       isTarget: false,
     },
     {
@@ -123,25 +125,25 @@ export default function SummaryCards() {
       icon: TrendingDown,
       color: "text-rose-600 dark:text-rose-400",
       bg: "bg-rose-100 dark:bg-rose-950/40",
-      description: "Seluruh Kas Keluar",
+      description: "Kas Keluar",
       isTarget: false,
     },
     {
-      title: "Sisa Saldo Kas Umum",
+      title: "Saldo Kas",
       amount: formatRp(summary.saldo),
       icon: Wallet,
       color: "text-blue-600 dark:text-blue-400",
       bg: "bg-blue-100 dark:bg-blue-950/40",
-      description: "Dana Bebas Siap Pakai",
+      description: "Siap Pakai",
       isTarget: false,
     },
     {
-      title: "Target Pembangunan",
-      amount: formatRp(TARGET_PEMBANGUNAN),
+      title: "Target Pemasukan",
+      amount: formatRp(TARGET_PEMASUKAN),
       icon: Building,
       color: "text-white dark:text-white",
       bg: "bg-blue-600 dark:bg-blue-800",
-      description: `Terkumpul ${formatRp(summary.targetTerkumpul)} (${percentage}%)`,
+      description: `Kurang ${formatRp(remaining)} (${percentage}%)`,
       isTarget: true,
     },
   ];
@@ -184,17 +186,17 @@ export default function SummaryCards() {
             </div>
           ) : (
             <>
-              <div className={`p-4 rounded-xl ${data.bg}`}>
+              <div className={`p-4 rounded-xl ${data.bg} shrink-0`}>
                 <data.icon className={`w-6 h-6 ${data.color}`} />
               </div>
-              <div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+              <div className="min-w-0">
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium truncate">
                   {data.title}
                 </p>
-                <h3 className="text-xl lg:text-2xl font-bold text-slate-800 dark:text-white mt-1 truncate">
+                <h3 className="text-xl lg:text-2xl font-bold text-slate-800 dark:text-white mt-1">
                   {data.amount}
                 </h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 truncate">
                   {data.description}
                 </p>
               </div>
