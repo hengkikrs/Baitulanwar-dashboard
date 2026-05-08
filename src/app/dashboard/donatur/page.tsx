@@ -80,21 +80,65 @@ export default function DonaturPage() {
     maxAmount: "",
   });
 
+  const STORAGE_KEY = "donors_data";
+
+  const getLocalDonors = () => {
+    if (typeof window === "undefined") return [];
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  };
+
+  const setLocalDonors = (data: any[]) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  };
+
+  const checkSupabaseTable = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("donors")
+        .select("id")
+        .limit(1);
+      return !error || error.code !== "42P01";
+    } catch {
+      return false;
+    }
+  };
+
   const fetchDonors = async () => {
     setIsLoadingData(true);
+    const isSupabaseAvailable = await checkSupabaseTable();
+    
+    if (!isSupabaseAvailable) {
+      const local = getLocalDonors();
+      if (local.length > 0) {
+        setDonors(local);
+        setFilteredDonors(local);
+      } else {
+        setDonors(defaultDonors);
+        setFilteredDonors(defaultDonors);
+      }
+      setIsLoadingData(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("donors")
       .select("*")
       .order("lastDate", { ascending: false });
 
     if (error) {
-      console.error("Error fetching donors:", error);
-      // Jika tabel belum ada, kita gunakan default data agar tidak blank
-      setDonors(defaultDonors);
-      setFilteredDonors(defaultDonors);
+      const local = getLocalDonors();
+      if (local.length > 0) {
+        setDonors(local);
+        setFilteredDonors(local);
+      } else {
+        setDonors(defaultDonors);
+        setFilteredDonors(defaultDonors);
+      }
     } else if (data && data.length > 0) {
       setDonors(data);
       setFilteredDonors(data);
+      setLocalDonors(data);
     } else {
       setDonors(defaultDonors);
       setFilteredDonors(defaultDonors);
@@ -236,6 +280,16 @@ export default function DonaturPage() {
 
   const handleDelete = async (id: number | string) => {
     if (window.confirm("Yakin ingin menghapus data donatur ini?")) {
+      const isSupabaseAvailable = await checkSupabaseTable();
+      
+      if (!isSupabaseAvailable) {
+        const localData = getLocalDonors().filter((d: any) => d.id !== id);
+        setLocalDonors(localData);
+        setDonors(localData);
+        setFilteredDonors(localData);
+        return;
+      }
+
       const { error } = await supabase.from("donors").delete().eq("id", id);
       if (error) {
         alert("Gagal menghapus data dari server.");
@@ -253,6 +307,32 @@ export default function DonaturPage() {
       formData.name.trim() !== "" ? formData.name : "Hamba Allah";
     const finalEmail = formData.email.trim() !== "" ? formData.email : "-";
     const finalPhone = formData.phone.trim() !== "" ? formData.phone : "-";
+
+    const isSupabaseAvailable = await checkSupabaseTable();
+
+    if (!isSupabaseAvailable) {
+      const localData = getLocalDonors();
+      const newDonor = {
+        id: Date.now(),
+        name: finalName,
+        email: finalEmail,
+        phone: finalPhone,
+        category: formData.category,
+        totalDonation: `Rp ${formData.amount}`,
+        lastDate: inputDate,
+        status: formData.status,
+      };
+      
+      const updatedData = editId 
+        ? localData.map((d: any) => d.id === editId ? { ...d, ...newDonor, id: editId } : d)
+        : [newDonor, ...localData];
+      
+      setLocalDonors(updatedData);
+      setDonors(updatedData);
+      setFilteredDonors(updatedData);
+      setIsModalOpen(false);
+      return;
+    }
 
     if (editId) {
       const { error } = await supabase
@@ -275,7 +355,6 @@ export default function DonaturPage() {
         fetchDonors();
       }
     } else {
-      // Tambah Donatur Baru
       const { error: donorError } = await supabase.from("donors").insert([
         {
           name: finalName,
@@ -291,24 +370,24 @@ export default function DonaturPage() {
       if (donorError) {
         alert("Gagal menyimpan data donatur.");
         console.error(donorError);
-      } else {
-        // Tambah Transaksi Pemasukan secara otomatis
-        const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
-        const { error: trxError } = await supabase.from("transactions").insert([
-          {
-            id: newTrxId,
-            date: inputDate,
-            type: "Pemasukan",
-            category: formData.category,
-            description: `Donasi dari ${finalName}`,
-            amount: `Rp ${formData.amount}`,
-            status: "Selesai",
-          },
-        ]);
-
-        if (trxError) console.error("Gagal mencatat transaksi otomatis:", trxError);
-        fetchDonors();
+        return;
       }
+
+      const newTrxId = `TRX-${Math.floor(Math.random() * 9000) + 1000}`;
+      const { error: trxError } = await supabase.from("transactions").insert([
+        {
+          id: newTrxId,
+          date: inputDate,
+          type: "Pemasukan",
+          category: formData.category,
+          description: `Donasi dari ${finalName}`,
+          amount: `Rp ${formData.amount}`,
+          status: "Selesai",
+        },
+      ]);
+
+      if (trxError) console.error("Gagal mencatat transaksi otomatis:", trxError);
+      fetchDonors();
     }
     setIsModalOpen(false);
   };
